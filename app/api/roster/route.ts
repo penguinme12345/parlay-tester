@@ -1,29 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 
-import { teams } from "@/lib/nba-data";
+import { fallbackRosterForTeam, teams } from "@/lib/nba-data";
+import { NBA_STATS_HEADERS, NbaStatsResponse, rowToObject } from "@/lib/nba-stats-api";
 
-type NbaResultSet = {
-  name: string;
-  headers: string[];
-  rowSet: Array<Array<string | number | null>>;
-};
-
-type NbaRosterResponse = {
-  resultSets?: NbaResultSet[];
-};
-
-const NBA_HEADERS = {
-  Accept: "application/json, text/plain, */*",
-  "Accept-Language": "en-US,en;q=0.9",
-  Connection: "keep-alive",
-  Host: "stats.nba.com",
-  Origin: "https://www.nba.com",
-  Referer: "https://www.nba.com/",
-  "User-Agent":
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
-  "x-nba-stats-origin": "stats",
-  "x-nba-stats-token": "true",
-};
+export const dynamic = "force-dynamic";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -45,24 +25,21 @@ export async function GET(request: NextRequest) {
 
   try {
     const response = await fetch(url, {
-      headers: NBA_HEADERS,
+      headers: NBA_STATS_HEADERS,
       next: { revalidate: 60 * 60 * 12 },
     });
 
     if (!response.ok) {
-      return NextResponse.json(
-        { error: `NBA roster request failed with ${response.status}.` },
-        { status: 502 },
-      );
+      return fallbackRosterResponse(teamId, `NBA roster request failed with ${response.status}.`);
     }
 
-    const payload = (await response.json()) as NbaRosterResponse;
+    const payload = (await response.json()) as NbaStatsResponse;
     const commonTeamRoster = payload.resultSets?.find(
       (set) => set.name === "CommonTeamRoster",
     );
 
     if (!commonTeamRoster) {
-      return NextResponse.json({ players: [] });
+      return fallbackRosterResponse(teamId, "NBA roster payload did not include a roster.");
     }
 
     const players = commonTeamRoster.rowSet
@@ -77,15 +54,19 @@ export async function GET(request: NextRequest) {
       .filter((player) => player.id && player.name)
       .sort((a, b) => a.name.localeCompare(b.name));
 
-    return NextResponse.json({ players });
-  } catch {
-    return NextResponse.json(
-      { error: "Could not reach stats.nba.com for roster data." },
-      { status: 502 },
+    return NextResponse.json({ players, source: "nba_api" });
+  } catch (error) {
+    return fallbackRosterResponse(
+      teamId,
+      error instanceof Error ? error.message : "Could not reach stats.nba.com for roster data.",
     );
   }
 }
 
-function rowToObject(headers: string[], row: Array<string | number | null>) {
-  return Object.fromEntries(headers.map((header, index) => [header, row[index]]));
+function fallbackRosterResponse(teamId: string, warning: string) {
+  return NextResponse.json({
+    players: fallbackRosterForTeam(teamId),
+    source: "fallback",
+    warning,
+  });
 }

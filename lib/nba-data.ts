@@ -243,3 +243,28 @@ export function generatedHistoryForPlayer(playerId: string, stat: StatKey) {
     return Math.max(0, statBase[stat] + wave + (index % 3));
   });
 }
+
+export function fallbackRosterForTeam(teamId: string): RosterPlayer[] {
+  const team = getTeam(teamId);
+  const knownPlayers = players
+    .filter((player) => player.teamId === teamId)
+    .map((player, index) => ({
+      id: player.id,
+      teamId,
+      name: player.name,
+      position: player.position,
+      jersey: String(index + 1),
+    }));
+
+  if (knownPlayers.length) {
+    return knownPlayers;
+  }
+
+  return [
+    { id: `${teamId}-guard-1`, teamId, name: `${team.code} Lead Guard`, position: "G", jersey: "1" },
+    { id: `${teamId}-guard-2`, teamId, name: `${team.code} Scoring Guard`, position: "G", jersey: "2" },
+    { id: `${teamId}-wing-1`, teamId, name: `${team.code} Wing`, position: "F", jersey: "3" },
+    { id: `${teamId}-forward-1`, teamId, name: `${team.code} Power Forward`, position: "F", jersey: "4" },
+    { id: `${teamId}-center-1`, teamId, name: `${team.code} Center`, position: "C", jersey: "5" },
+  ];
+}

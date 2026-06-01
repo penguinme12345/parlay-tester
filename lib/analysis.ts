@@ -9,8 +9,10 @@ export type LegAnalysis = {
   leg: ParlayLeg;
   hitRate: number;
   hits: number;
+  average: number;
   averageMargin: number;
   consistency: number;
+  trend: "Hot" | "Neutral" | "Cold";
   recentTrend: number[];
 };
 
@@ -81,16 +83,21 @@ export function analyzeSingleLeg(leg: ParlayLeg, gamesAnalyzed?: number): LegAna
     leg.lineType === "Over" ? value - leg.line : leg.line - value,
   );
   const hits = margins.filter((margin) => margin >= 0).length;
+  const average = round(sample.reduce((total, value) => total + value, 0) / sample.length);
   const hitRate = round((hits / sample.length) * 100);
   const averageMargin = round(margins.reduce((total, margin) => total + margin, 0) / margins.length);
   const consistency = round(Math.max(0, Math.min(100, hitRate - standardDeviation(margins) * 2)));
+  const recentAverage = sample.slice(0, 3).reduce((total, value) => total + value, 0) / 3;
+  const trend = recentAverage > average + 1 ? "Hot" : recentAverage < average - 1 ? "Cold" : "Neutral";
 
   return {
     leg,
     hitRate,
     hits,
+    average,
     averageMargin,
     consistency,
+    trend,
     recentTrend: sample.slice(0, 10),
   };
 }
